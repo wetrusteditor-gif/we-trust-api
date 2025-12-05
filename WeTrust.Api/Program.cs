@@ -2,45 +2,51 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Npgsql;
 using WeTrust.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ---- DATABASE (parse DATABASE_URL and force SSL for Supabase) ----
+// -------- DATABASE: parse DATABASE_URL safely (no Npgsql native types) ----------
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+string finalConn = builder.Configuration.GetConnectionString("DefaultConnection");
+
 if (!string.IsNullOrEmpty(databaseUrl))
 {
-    // Supports both "postgres://user:pass@host:5432/db" and full conn strings
     try
     {
-        var csb = new NpgsqlConnectionStringBuilder(databaseUrl)
-        {
-            SslMode = SslMode.Require,           // require SSL
-            TrustServerCertificate = true        // accept the certificate (Supabase uses valid certs; this avoids strict issues)
-        };
-        builder.Configuration["ConnectionStrings:DefaultConnection"] = csb.ToString();
-        Console.WriteLine("Using DATABASE_URL from env (with SSL enforced).");
+        // Support postgres://user:pass@host:port/dbname
+        var uri = new Uri(databaseUrl);
+        var userInfo = uri.UserInfo.Split(':');
+        var username = Uri.UnescapeDataString(userInfo[0]);
+        var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "";
+        var host = uri.Host;
+        var port = uri.Port > 0 ? uri.Port : 5432;
+        var database = uri.AbsolutePath.TrimStart('/');
+
+        // Build a plain Npgsql-style connection string and enforce SSL.
+        // Note: "Ssl Mode=Require;Trust Server Certificate=true" works for Supabase.
+        finalConn = $"Host={host};Port={port};Username={username};Password={password};Database={database};Ssl Mode=Require;Trust Server Certificate=true";
+        builder.Configuration["ConnectionStrings:DefaultConnection"] = finalConn;
+        Console.WriteLine("DATABASE_URL parsed and connection string set (ssl enforced).");
     }
     catch (Exception ex)
     {
-        Console.WriteLine("DATABASE_URL parse error: " + ex.Message);
+        Console.WriteLine("Error parsing DATABASE_URL: " + ex.Message);
     }
 }
 else
 {
-    Console.WriteLine("DATABASE_URL not found in env; ensure it's set in Render environment.");
+    Console.WriteLine("No DATABASE_URL env var found; using configured DefaultConnection if present.");
 }
 
-var defaultConn = builder.Configuration.GetConnectionString("DefaultConnection");
-Console.WriteLine("Connection string (start): " + (defaultConn?.Substring(0, Math.Min(80, defaultConn.Length)) ?? "<null>"));
+Console.WriteLine("Connection string preview: " + (finalConn?.Substring(0, Math.Min(120, finalConn.Length)) ?? "<null>"));
 
-// ---- DbContext ----
+// -------- DbContext ----------
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ---- JWT (unchanged) ----
-var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "PLEASE_SET_JWT_SECRET";
+// -------- JWT ----------
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? builder.Configuration["Jwt:Secret"] ?? "PLEASE_SET_JWT_SECRET";
 var key = Encoding.UTF8.GetBytes(jwtSecret);
 builder.Services.AddAuthentication(options =>
 {
@@ -64,9 +70,22 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// ---- Simple health endpoint ----
-app.MapGet("/health", () => Results.Ok(new { status = "ok", now = DateTime.UtcNow }));
+// ---- Health endpoint ----
+app.MapGet("/health", async (AppDbContext db) =>
+{
+    // attempt a simple DB call to verify connection (safe)
+    try
+    {
+        await db.Database.CanConnectAsync();
+        return Results.Ok(new { status = "ok", db = "connected", now = DateTime.UtcNow });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(title: "db_error", detail: ex.Message);
+    }
+});
 
+// ---- other middleware ----
 app.UseSwagger();
 app.UseSwaggerUI();
 
@@ -75,18 +94,18 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Ensure DB created (safe for first run)
+// Optional: ensure DB created (safe for first runs)
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     try
     {
         db.Database.EnsureCreated();
-        Console.WriteLine("Database EnsureCreated executed.");
+        Console.WriteLine("Database EnsureCreated succeeded.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine("DB ensure/create error: " + ex.Message);
+        Console.WriteLine("Database EnsureCreated failed: " + ex.Message);
     }
 }
 
