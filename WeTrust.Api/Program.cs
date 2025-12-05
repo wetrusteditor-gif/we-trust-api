@@ -6,7 +6,7 @@ using WeTrust.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// -------- DATABASE: parse DATABASE_URL safely and prefer IPv4 (important for networks without IPv6) ----------
+// ---------- DATABASE: parse DATABASE_URL and prefer IPv4 (synchronous) ----------
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 string finalConn = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -22,12 +22,11 @@ if (!string.IsNullOrEmpty(databaseUrl))
         var port = uri.Port > 0 ? uri.Port : 5432;
         var database = uri.AbsolutePath.TrimStart('/');
 
-        // Resolve DNS and prefer IPv4 address if available
         string hostToUse = host;
         try
         {
-            Console.WriteLine($"Resolving DNS for host: {host}");
-            var addresses = await System.Net.Dns.GetHostAddressesAsync(host);
+            Console.WriteLine($"Resolving DNS for host: {host} (synchronous)");
+            var addresses = System.Net.Dns.GetHostAddresses(host);
             var ipv4 = addresses.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
             if (ipv4 != null)
             {
@@ -45,7 +44,6 @@ if (!string.IsNullOrEmpty(databaseUrl))
             hostToUse = host;
         }
 
-        // Build Npgsql-style connection string and enforce SSL.
         finalConn = $"Host={hostToUse};Port={port};Username={username};Password={password};Database={database};Ssl Mode=Require;Trust Server Certificate=true";
         builder.Configuration["ConnectionStrings:DefaultConnection"] = finalConn;
         Console.WriteLine("DATABASE_URL parsed and connection string set (ssl enforced).");
@@ -61,6 +59,7 @@ else
 }
 
 Console.WriteLine("Connection string preview: " + (finalConn?.Substring(0, Math.Min(160, finalConn.Length)) ?? "<null>"));
+
 
 // -------- DbContext ----------
 builder.Services.AddDbContext<AppDbContext>(options =>
