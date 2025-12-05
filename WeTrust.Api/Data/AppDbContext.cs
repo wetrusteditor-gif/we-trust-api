@@ -16,29 +16,50 @@ namespace WeTrust.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // Explicit table mapping to match PostgreSQL
+            // ACCOUNTHEAD CONFIG
             modelBuilder.Entity<AccountHead>(entity =>
             {
+                // Map to existing table
+                entity.ToTable("accountheads", "public");
+
+                // Key
                 entity.HasKey(a => a.AccountHeadId);
-                entity.ToTable("accountheads", "public"); // 👈 important line
-                entity.Property(a => a.Name).HasMaxLength(100).IsRequired();
+
+                // Column mappings (C# property -> DB column)
+                entity.Property(a => a.AccountHeadId)
+                      .HasColumnName("accountheadid");
+
+                entity.Property(a => a.Name)
+                      .HasColumnName("name")
+                      .HasMaxLength(100)   // your original config
+                      .IsRequired();
+
+                entity.Property(a => a.Category)
+                      .HasColumnName("category");
+
+                entity.Property(a => a.IsActive)
+                      .HasColumnName("isactive");
+
+                entity.Property(a => a.OpeningBalance)
+                      .HasColumnName("openingbalance");
+
+                entity.Property(a => a.OpeningBalanceType)
+                      .HasColumnName("openingbalancetype");
             });
 
-            // Define primary keys explicitly
+            // OTHER ENTITIES (unchanged)
             modelBuilder.Entity<User>().HasKey(u => u.UserId);
             modelBuilder.Entity<OrganizationSetting>().HasKey(o => o.OrgId);
             modelBuilder.Entity<DocumentSequence>().HasKey(ds => ds.Id);
             modelBuilder.Entity<Document>().HasKey(d => d.DocumentId);
             modelBuilder.Entity<JournalLine>().HasKey(j => j.LineId);
 
-            // Configure relationships
             modelBuilder.Entity<Document>()
                 .HasMany(d => d.JournalLines)
                 .WithOne()
                 .HasForeignKey(j => j.DocumentId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Configure column lengths / types
             modelBuilder.Entity<User>().Property(u => u.Username).HasMaxLength(50).IsRequired();
             modelBuilder.Entity<User>().Property(u => u.PasswordHash).HasMaxLength(255).IsRequired();
 
@@ -47,5 +68,6 @@ namespace WeTrust.Api.Data
 
             base.OnModelCreating(modelBuilder);
         }
+
     }
 }
