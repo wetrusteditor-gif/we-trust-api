@@ -6,7 +6,7 @@ using WeTrust.Api.Models;
 namespace WeTrust.Api.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("account-heads")]
     public class AccountHeadsController : ControllerBase
     {
         private readonly AppDbContext _context;
