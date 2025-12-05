@@ -6,7 +6,7 @@ using WeTrust.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// -------- DATABASE: parse DATABASE_URL safely (no Npgsql native types) ----------
+// -------- DATABASE: parse DATABASE_URL safely and prefer IPv4 (important for networks without IPv6) ----------
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 string finalConn = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -14,7 +14,6 @@ if (!string.IsNullOrEmpty(databaseUrl))
 {
     try
     {
-        // Support postgres://user:pass@host:port/dbname
         var uri = new Uri(databaseUrl);
         var userInfo = uri.UserInfo.Split(':');
         var username = Uri.UnescapeDataString(userInfo[0]);
@@ -23,9 +22,31 @@ if (!string.IsNullOrEmpty(databaseUrl))
         var port = uri.Port > 0 ? uri.Port : 5432;
         var database = uri.AbsolutePath.TrimStart('/');
 
-        // Build a plain Npgsql-style connection string and enforce SSL.
-        // Note: "Ssl Mode=Require;Trust Server Certificate=true" works for Supabase.
-        finalConn = $"Host={host};Port={port};Username={username};Password={password};Database={database};Ssl Mode=Require;Trust Server Certificate=true";
+        // Resolve DNS and prefer IPv4 address if available
+        string hostToUse = host;
+        try
+        {
+            Console.WriteLine($"Resolving DNS for host: {host}");
+            var addresses = await System.Net.Dns.GetHostAddressesAsync(host);
+            var ipv4 = addresses.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+            if (ipv4 != null)
+            {
+                hostToUse = ipv4.ToString();
+                Console.WriteLine($"Using IPv4 address for host: {hostToUse}");
+            }
+            else
+            {
+                Console.WriteLine("No IPv4 address found; will use host name (may attempt IPv6).");
+            }
+        }
+        catch (Exception dnsEx)
+        {
+            Console.WriteLine("DNS resolution failed, will use host name: " + dnsEx.Message);
+            hostToUse = host;
+        }
+
+        // Build Npgsql-style connection string and enforce SSL.
+        finalConn = $"Host={hostToUse};Port={port};Username={username};Password={password};Database={database};Ssl Mode=Require;Trust Server Certificate=true";
         builder.Configuration["ConnectionStrings:DefaultConnection"] = finalConn;
         Console.WriteLine("DATABASE_URL parsed and connection string set (ssl enforced).");
     }
@@ -39,7 +60,7 @@ else
     Console.WriteLine("No DATABASE_URL env var found; using configured DefaultConnection if present.");
 }
 
-Console.WriteLine("Connection string preview: " + (finalConn?.Substring(0, Math.Min(120, finalConn.Length)) ?? "<null>"));
+Console.WriteLine("Connection string preview: " + (finalConn?.Substring(0, Math.Min(160, finalConn.Length)) ?? "<null>"));
 
 // -------- DbContext ----------
 builder.Services.AddDbContext<AppDbContext>(options =>
