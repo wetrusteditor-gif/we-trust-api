@@ -16,14 +16,100 @@ namespace WeTrust.Api.Controllers
             _context = context;
         }
 
+        // GET /account-heads
         [HttpGet]
         public async Task<ActionResult<IEnumerable<AccountHead>>> GetAll()
         {
             var list = await _context.AccountHeads
                 .AsNoTracking()
-                .ToListAsync();   // line 19 in your stack trace
+                .ToListAsync();
 
             return Ok(list);
+        }
+
+        // GET /account-heads/{id}
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<AccountHead>> GetById(int id)
+        {
+            var entity = await _context.AccountHeads
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.AccountHeadId == id);
+
+            if (entity == null)
+                return NotFound();
+
+            return Ok(entity);
+        }
+
+        // POST /account-heads
+        [HttpPost]
+        public async Task<ActionResult<AccountHead>> Create([FromBody] AccountHead model)
+        {
+            if (model == null)
+                return BadRequest("Body is required.");
+
+            if (string.IsNullOrWhiteSpace(model.Name))
+                return BadRequest("Name is required.");
+
+            // Ensure EF treats this as a new entity (DB will generate PK)
+            model.AccountHeadId = 0;
+
+            // Optional: default values if client doesn’t send them
+            if (string.IsNullOrWhiteSpace(model.OpeningBalanceType))
+                model.OpeningBalanceType = "D"; // e.g., Debit by default
+
+            _context.AccountHeads.Add(model);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = model.AccountHeadId },
+                model
+            );
+        }
+
+        // PUT /account-heads/{id}
+        [HttpPut("{id:int}")]
+        public async Task<ActionResult<AccountHead>> Update(int id, [FromBody] AccountHead model)
+        {
+            if (model == null)
+                return BadRequest("Body is required.");
+
+            if (string.IsNullOrWhiteSpace(model.Name))
+                return BadRequest("Name is required.");
+
+            var existing = await _context.AccountHeads
+                .FirstOrDefaultAsync(a => a.AccountHeadId == id);
+
+            if (existing == null)
+                return NotFound();
+
+            // Update fields
+            existing.Name = model.Name;
+            existing.Category = model.Category;
+            existing.IsActive = model.IsActive;
+            existing.OpeningBalance = model.OpeningBalance;
+            existing.OpeningBalanceType = model.OpeningBalanceType;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(existing);
+        }
+
+        // DELETE /account-heads/{id}
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var existing = await _context.AccountHeads
+                .FirstOrDefaultAsync(a => a.AccountHeadId == id);
+
+            if (existing == null)
+                return NotFound();
+
+            _context.AccountHeads.Remove(existing);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
         }
     }
 }
