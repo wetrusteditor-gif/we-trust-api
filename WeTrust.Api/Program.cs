@@ -1,10 +1,14 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using WeTrust.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Bind web server to PORT (Railway) or 8080 locally
+var httpPort = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+builder.WebHost.UseUrls($"http://0.0.0.0:{httpPort}");
 
 // ---------- DATABASE: parse DATABASE_URL and prefer IPv4 (synchronous) ----------
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
@@ -19,7 +23,7 @@ if (!string.IsNullOrEmpty(databaseUrl))
         var username = Uri.UnescapeDataString(userInfo[0]);
         var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "";
         var host = uri.Host;
-        var port = uri.Port > 0 ? uri.Port : 5432;
+        var dbPort = uri.Port > 0 ? uri.Port : 5432;   // 👈 renamed
         var database = uri.AbsolutePath.TrimStart('/');
 
         string hostToUse = host;
@@ -44,7 +48,8 @@ if (!string.IsNullOrEmpty(databaseUrl))
             hostToUse = host;
         }
 
-        finalConn = $"Host={hostToUse};Port={port};Username={username};Password={password};Database={database};Ssl Mode=Require;Trust Server Certificate=true";
+        finalConn =
+            $"Host={hostToUse};Port={dbPort};Username={username};Password={password};Database={database};Ssl Mode=Require;Trust Server Certificate=true";
         builder.Configuration["ConnectionStrings:DefaultConnection"] = finalConn;
         Console.WriteLine("DATABASE_URL parsed and connection string set (ssl enforced).");
     }
@@ -60,7 +65,6 @@ else
 
 Console.WriteLine("Connection string preview: " + (finalConn?.Substring(0, Math.Min(160, finalConn.Length)) ?? "<null>"));
 
-
 // -------- DbContext ----------
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
@@ -71,7 +75,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             npgsqlOptions.CommandTimeout(60); // seconds
         });
 });
-
 
 // -------- JWT ----------
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? builder.Configuration["Jwt:Secret"] ?? "PLEASE_SET_JWT_SECRET";
@@ -101,7 +104,6 @@ var app = builder.Build();
 // ---- Health endpoint ----
 app.MapGet("/health", async (AppDbContext db) =>
 {
-    // attempt a simple DB call to verify connection (safe)
     try
     {
         await db.Database.CanConnectAsync();
