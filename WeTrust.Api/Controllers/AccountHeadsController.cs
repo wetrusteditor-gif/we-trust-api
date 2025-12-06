@@ -24,6 +24,7 @@ namespace WeTrust.Api.Controllers
                 .AsNoTracking()
                 .ToListAsync();
 
+            // Even if list is empty, this returns [] (2 bytes), NOT 0-length.
             return Ok(list);
         }
 
@@ -51,21 +52,17 @@ namespace WeTrust.Api.Controllers
             if (string.IsNullOrWhiteSpace(model.Name))
                 return BadRequest("Name is required.");
 
-            // Ensure EF treats this as a new entity (DB will generate PK)
+            // Ensure EF treats this as a new row; DB will generate the ID
             model.AccountHeadId = 0;
 
-            // Optional: default values if client doesn’t send them
             if (string.IsNullOrWhiteSpace(model.OpeningBalanceType))
-                model.OpeningBalanceType = "D"; // e.g., Debit by default
+                model.OpeningBalanceType = "D"; // default, adjust as you like
 
             _context.AccountHeads.Add(model);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(
-                nameof(GetById),
-                new { id = model.AccountHeadId },
-                model
-            );
+            // Always return JSON body so Swagger and curl both see it
+            return Ok(model);
         }
 
         // PUT /account-heads/{id}
@@ -84,7 +81,6 @@ namespace WeTrust.Api.Controllers
             if (existing == null)
                 return NotFound();
 
-            // Update fields
             existing.Name = model.Name;
             existing.Category = model.Category;
             existing.IsActive = model.IsActive;
@@ -95,7 +91,6 @@ namespace WeTrust.Api.Controllers
 
             return Ok(existing);
         }
-
 
         // DELETE /account-heads/{id}
         [HttpDelete("{id:int}")]

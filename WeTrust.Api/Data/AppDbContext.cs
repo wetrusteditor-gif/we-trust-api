@@ -25,7 +25,7 @@ namespace WeTrust.Api.Data
 
                 entity.Property(a => a.AccountHeadId)
                       .HasColumnName("accountheadid")
-                      .ValueGeneratedOnAdd();  // 👈 tell EF the DB generates this
+                      .ValueGeneratedOnAdd();  // 👈 important: DB generates the ID
 
                 entity.Property(a => a.Name)
                       .HasColumnName("name")
@@ -44,6 +44,7 @@ namespace WeTrust.Api.Data
                 entity.Property(a => a.OpeningBalanceType)
                       .HasColumnName("openingbalancetype");
             });
+
 
 
             // OTHER ENTITIES (unchanged)
