@@ -18,14 +18,19 @@ namespace WeTrust.Api.Controllers
 
         // GET /account-heads
         [HttpGet]
+        [Produces("application/json")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
         public async Task<ActionResult<IEnumerable<AccountHead>>> GetAll()
         {
+            Console.WriteLine($"[AccountHeads] GET all at {DateTime.UtcNow:o}");
+
             var list = await _context.AccountHeads
                 .AsNoTracking()
                 .ToListAsync();
 
-            // Even if list is empty, this returns [] (2 bytes), NOT 0-length.
-            return Ok(list);
+            Console.WriteLine($"[AccountHeads] Returned {list.Count} rows at {DateTime.UtcNow:o}");
+
+            return Ok(list); // always returns JSON body: [] or [ ... ]
         }
 
         // GET /account-heads/{id}
