@@ -19,19 +19,17 @@ namespace WeTrust.Api.Data
             // ACCOUNTHEAD CONFIG
             modelBuilder.Entity<AccountHead>(entity =>
             {
-                // Map to existing table
                 entity.ToTable("accountheads", "public");
 
-                // Key
                 entity.HasKey(a => a.AccountHeadId);
 
-                // Column mappings (C# property -> DB column)
                 entity.Property(a => a.AccountHeadId)
-                      .HasColumnName("accountheadid");
+                      .HasColumnName("accountheadid")
+                      .ValueGeneratedOnAdd();  // 👈 tell EF the DB generates this
 
                 entity.Property(a => a.Name)
                       .HasColumnName("name")
-                      .HasMaxLength(100)   // your original config
+                      .HasMaxLength(100)
                       .IsRequired();
 
                 entity.Property(a => a.Category)
@@ -46,6 +44,7 @@ namespace WeTrust.Api.Data
                 entity.Property(a => a.OpeningBalanceType)
                       .HasColumnName("openingbalancetype");
             });
+
 
             // OTHER ENTITIES (unchanged)
             modelBuilder.Entity<User>().HasKey(u => u.UserId);

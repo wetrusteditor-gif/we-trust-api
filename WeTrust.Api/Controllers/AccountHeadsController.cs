@@ -96,6 +96,7 @@ namespace WeTrust.Api.Controllers
             return Ok(existing);
         }
 
+
         // DELETE /account-heads/{id}
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
